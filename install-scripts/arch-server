@@ -3,7 +3,7 @@ set -e
 
 # Print an ASCII art logo
 logo() {
-printf "\033[36m_____________________________________________ 
+printf "_____________________________________________ 
      __              __        _  _        
     /  )        /   /  )      // //        
    /--/ __  _. /_  /  / __.  // // __.  _, 
@@ -13,13 +13,13 @@ printf "\033[36m_____________________________________________
 _____________________________________________
 
     'Every Little Thing He Does Is Magic'    
-_____________________________________________\033[0m\n"
+_____________________________________________\n"
 }
 
 # Make sure the script is run as root
 verify_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        printf "\033[31mERROR: This script must be run as root.\033[0m\n"
+        printf "ERROR: This script must be run as root.\n"
         exit 1
     fi
 }
@@ -27,7 +27,7 @@ verify_root() {
 # Make sure the script is run from an Arch Linux ISO environment
 verify_iso() {
     if [ ! -e /run/archiso/bootmnt/arch/x86_64/airootfs.sfs ]; then
-        printf "\033[31mERROR: This script must be run from an Arch Linux ISO environment.\033[0m\n"
+        printf "ERROR: This script must be run from an Arch Linux ISO environment.\n"
         exit 1
     fi
 }
@@ -36,7 +36,7 @@ verify_iso() {
 verify_pacman() {
     if [ -f /var/lib/pacman/db.lck ]; then
         if pgrep -x pacman >/dev/null; then
-            printf "\033[31mERROR: Pacman is currently running. Close it before proceeding.\033[0m\n"
+            printf "ERROR: Pacman is currently running. Close it before proceeding.\n"
             exit 1
         else
             rm -f /var/lib/pacman/db.lck
@@ -54,17 +54,18 @@ verify_all() {
 # Detect if the system is running in UEFI or BIOS mode
 boot_mode() {
     if [ -f /sys/firmware/efi/fw_platform_size ]; then
-        printf "\n\033[1;32m>> System will be installed in UEFI mode.\033[0m\n"
+        printf "\n>> System will be installed in UEFI mode.\n"
         BOOT=UEFI
     else
-        printf "\n\033[1;32m>> System will be installed in BIOS mode.\033[0m\n"
+        printf "\n>> System will be installed in BIOS mode.\n"
         BOOT=BIOS
     fi
 }
 
+# Prompt the user to select a filesystem
 filesystem() {
     while :; do
-        printf "\033[36m_____________________________________________
+        printf "_____________________________________________
 
              Choose a Filesystem
 _____________________________________________ 
@@ -79,29 +80,33 @@ _____________________________________________
   suitable for large files and databases.
 _____________________________________________
 
-Make your choice (1-3), default is ext4: \033[0m"
+Make your choice (1-3), default is ext4: "
 
         read -r fs_choice
 
         case $fs_choice in
             1|"" )
-                printf "\033[1;32m>> Filesystem set to ext4\033[0m\n"
+                printf ">> Filesystem set to ext4\n"
                 FS=ext4
                 break
                 ;;
             2 )
-                printf "\033[1;32m>> Filesystem set to btrfs\033[0m\n"
+                printf ">> Filesystem set to btrfs\n"
                 FS=btrfs
                 break
                 ;;
             3 )
-                printf "\033[1;32m>> Filesystem set to xfs\033[0m\n"
+                printf ">> Filesystem set to xfs\n"
                 FS=xfs
                 break
                 ;;
             * )
-                printf "\033[33m>> Invalid option, please try again\033[0m\n"
+                printf ">> Invalid option, please try again\n"
                 ;;
         esac
     done
 }
+
+logo
+boot_mode
+filesystem
