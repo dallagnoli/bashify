@@ -171,31 +171,59 @@ _____________________________________________\n\n"
     done
 }
 
-# Prompt the user to set a hostname
-hostname() {
+# Prompt the user for username, password, and hostname
+userinfo() {
     while :; do
         printf "_____________________________________________
 
-             Setting a Hostname
+             User Information
 _____________________________________________ 
 
-  -> Must start with a letter.
+Type your username: "
 
-  -> Cannot end with a hyphen.
+        read -r username_input
 
-  -> Avoid dots and uppercase letters.
+        username_raw=$(printf '%s' "$username_input" | tr '[:upper:]' '[:lower:]')
 
-  -> Only lowercase letters, digits, and 
-     hyphens.
+        if [ "$username_raw" != "root" ] && printf '%s' "$username_raw" | grep -Eq '^[a-z_][a-z0-9_-]{0,30}[a-z0-9]$'; then
+            printf ">> Username has been set to: %s\n\n" "$username_input"
+            export USERNAME="$username_input"
+            break
+        else
+            printf ">> Invalid username. Please try again.\n"
+        fi
+    done
 
-  -> Length: 1–63 characters.
-_____________________________________________
+    while :; do
+        printf "Type your password: "
+        stty -echo
+        read -r "passwd1"
+        stty echo
 
-Type your hostname: "
+        printf "\nRepeat your password: "
+        stty -echo
+        read -r "passwd2"
+        stty echo
+
+        if [ "$passwd1" != "$passwd2" ]; then
+            printf "\n>> Passwords don't match. Please try again.\n\n"
+        elif [ "$passwd1" = "$passwd2" ] && [ -n "$passwd1" ]; then
+            printf "\n>> Password has been set\n\n"
+            export PASSWORD="$passwd1"
+            break
+        else
+            printf "\n>> Invalid password. Please try again.\n\n"
+        fi
+    done
+
+    while :; do
+        printf "Type your hostname: "
 
         read -r hostname_input
 
-        if printf '%s' "$hostname_input" | grep -Eq '^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'; then
+        hostname_raw=$(printf '%s' "$hostname_input" | tr '[:upper:]' '[:lower:]')
+
+        if printf '%s' "$hostname_raw" | grep -Eq '^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'; then
             printf ">> Hostname has been set to: %s\n" "$hostname_input"
             export HOSTNAME="$hostname_input"
             break
@@ -205,37 +233,7 @@ Type your hostname: "
     done
 }
 
-# Prompt the user to set a username
-username() {
-    while :; do
-        printf "_____________________________________________
-
-             Setting a Username
-_____________________________________________ 
-
-  -> Must start with a letter or underscore.
-
-  -> Cannot end with a hyphen or underscore.
-
-  -> Avoid dots and uppercase letters.
-
-  -> Only lowercase letters, digits, 
-     underscores and hyphens.
-
-  -> Length: 1–32 characters.
-_____________________________________________
-
-Type your username: "
-
-        read -r username_input
-
-        if [ "$username_input" != "root" ] && printf '%s' "$username_input" | grep -Eq '^[a-z_][a-z0-9_-]{0,30}[a-z0-9]$'; then
-            printf ">> Username has been set to: %s\n" "$username_input"
-            export USERNAME="$username_input"
-            break
-        else
-            printf ">> Invalid username. Please try again.\n"
-        fi
-    done
-}
-
+logo
+userinfo
+disk
+filesystem
