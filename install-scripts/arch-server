@@ -90,22 +90,22 @@ Make your choice (1-4), default is ext4: "
         case $fs_choice in
             ""|1 ) 
                 printf ">> Selected filesystem: ext4\n"
-                export FS=ext4
+                export FS="ext4"
                 break
                 ;;
             2 )
                 printf ">> Selected filesystem: f2fs\n"
-                export FS=f2fs
+                export FS="f2fs"
                 break
                 ;;
             3 )
                 printf ">> Selected filesystem: btrfs\n"
-                export FS=btrfs
+                export FS="btrfs"
                 break
                 ;;
             4 )
                 printf ">> Selected filesystem: xfs\n"
-                export FS=xfs
+                export FS="xfs"
                 break
                 ;;
             * )
@@ -116,55 +116,58 @@ Make your choice (1-4), default is ext4: "
 }
 
 disk() {
-    printf "_____________________________________________
+    disk_list=$(mktemp)
+    trap 'rm -f "$disk_list"' EXIT
 
-             Select a Disk
+    while :; do
+        printf "_____________________________________________
+
+                Select a Disk
 _____________________________________________\n\n"
 
-    names=$(mktemp)
-    sizes=$(mktemp)
+        lsblk -dn -o NAME,SIZE,TYPE,TRAN | awk '
+            $3 == "disk" && $4 != "usb" && $1 !~ /^(loop|ram|sr|fd)/ {
+                print $1, $2
+            }' > "$disk_list"
 
-    lsblk -dn -o NAME,SIZE,TYPE,TRAN | awk '$3 == "disk" && $4 != "usb" && $1 !~ /^(loop|ram|sr|fd)/ {
-        print $1 >> "'"$names"'"
-        print $2 >> "'"$sizes"'"
-    }'
+        disk_total=$(wc -l < "$disk_list")
+        if [ "$disk_total" -eq 0 ]; then
+            printf "ERROR: No valid disks found.\n"
+            exit 1
+        fi
 
-    total=$(wc -l < "$names")
-    [ "$total" -eq 0 ] && echo "No valid disks found." && rm "$names" "$sizes" && return 1
-
-    i=1
-    while [ "$i" -le "$total" ]; do
-        name=$(sed -n "${i}p" "$names")
-        size=$(sed -n "${i}p" "$sizes")
-        printf "[%s] %s: %s\n\n" "$i" "$name" "$size"
-        i=$((i + 1))
-    done
-
-    printf "_____________________________________________\n\nMake your choice (number): "
-    read disk_choice
-
-    case $disk_choice in
-        ''|*[!0-9]*)
-            printf "Invalid input: not a number.\n"
-            rm "$names" "$sizes"
-            return 1
-            ;;
-        *)
-            if [ "$disk_choice" -lt 1 ] || [ "$disk_choice" -gt "$total" ]; then
-                printf "Invalid choice: out of range.\n"
-                rm "$names" "$sizes"
-                return 1
+        i=1
+        while [ "$i" -le "$disk_total" ]; do
+            line=$(sed -n "${i}p" "$disk_list")
+            disk_name=$(printf '%s\n' "$line" | cut -d' ' -f1)
+            disk_size=$(printf '%s\n' "$line" | cut -d' ' -f2)
+            if [ "$i" -eq "$disk_total" ]; then
+                printf "  [%s] %s: %s\n" "$i" "$disk_name" "$disk_size"
+            else
+                printf "  [%s] %s: %s\n\n" "$i" "$disk_name" "$disk_size"
             fi
-            ;;
-    esac
+            i=$((i + 1))
+        done
 
-    selected_disk=$(sed -n "${disk_choice}p" "$names")
-    printf ">> Selected disk: %s\n" "$selected_disk"
+        printf "_____________________________________________\n\nMake your choice (1-%d): " "$disk_total"
+        read -r disk_choice
 
-    export DISK="/dev/$selected_disk"
-    echo "$selected_disk"
-
-    rm "$names" "$sizes"
+        case $disk_choice in
+            ''|*[!0-9]*)
+                printf ">> Invalid option. Please enter 1-%d.\n" "$disk_total"
+                ;;
+            *)
+                if [ "$disk_choice" -lt 1 ] || [ "$disk_choice" -gt "$disk_total" ]; then
+                    printf ">> Invalid option. Please enter 1-%d.\n" "$disk_total"
+                else
+                    disk_selected=$(sed -n "${disk_choice}p" "$disk_list" | cut -d' ' -f1)
+                    printf ">> Selected disk: %s\n" "$disk_selected"
+                    export DISK="/dev/$disk_selected"
+                    break
+                fi
+                ;;
+        esac
+    done
 }
 
 disk
