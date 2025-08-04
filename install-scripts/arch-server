@@ -115,3 +115,57 @@ Make your choice (1-4), default is ext4: "
     done
 }
 
+disk() {
+    printf "_____________________________________________
+
+             Select a Disk
+_____________________________________________\n\n"
+
+    names=$(mktemp)
+    sizes=$(mktemp)
+
+    lsblk -dn -o NAME,SIZE,TYPE,TRAN | awk '$3 == "disk" && $4 != "usb" && $1 !~ /^(loop|ram|sr|fd)/ {
+        print $1 >> "'"$names"'"
+        print $2 >> "'"$sizes"'"
+    }'
+
+    total=$(wc -l < "$names")
+    [ "$total" -eq 0 ] && echo "No valid disks found." && rm "$names" "$sizes" && return 1
+
+    i=1
+    while [ "$i" -le "$total" ]; do
+        name=$(sed -n "${i}p" "$names")
+        size=$(sed -n "${i}p" "$sizes")
+        printf "[%s] %s: %s\n\n" "$i" "$name" "$size"
+        i=$((i + 1))
+    done
+
+    printf "_____________________________________________\n\nMake your choice (number): "
+    read disk_choice
+
+    case $disk_choice in
+        ''|*[!0-9]*)
+            printf "Invalid input: not a number.\n"
+            rm "$names" "$sizes"
+            return 1
+            ;;
+        *)
+            if [ "$disk_choice" -lt 1 ] || [ "$disk_choice" -gt "$total" ]; then
+                printf "Invalid choice: out of range.\n"
+                rm "$names" "$sizes"
+                return 1
+            fi
+            ;;
+    esac
+
+    selected_disk=$(sed -n "${disk_choice}p" "$names")
+    printf ">> Selected disk: %s\n" "$selected_disk"
+
+    export DISK="/dev/$selected_disk"
+    echo "$selected_disk"
+
+    rm "$names" "$sizes"
+}
+
+disk
+filesystem
