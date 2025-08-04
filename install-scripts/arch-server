@@ -67,46 +67,51 @@ filesystem() {
     while :; do
         printf "_____________________________________________
 
-             Choose a Filesystem
+             Select a Filesystem
 _____________________________________________ 
 
-  [1] ext4: Recommended for most users, 
-  stable and widely supported.
+  [1] ext4: Stable, fast, and proven. 
+  Default choice for most users.
 
-  [2] btrfs: Advanced filesystem with 
-  features like snapshots and compression.
+  [2] f2fs: Optimized for SSDs and eMMC. 
+  Improves flash longevity and speed.
 
-  [3] xfs: High-performance filesystem 
-  suitable for large files and databases.
+  [3] btrfs: Advanced features: snapshots, 
+  compression, subvolumes.
+
+  [4] xfs: High-performance journaling. 
+  Ideal for large files and workloads.
 _____________________________________________
 
-Make your choice (1-3), default is ext4: "
+Make your choice (1-4), default is ext4: "
 
         read -r fs_choice
 
         case $fs_choice in
-            1|"" )
-                printf ">> Filesystem set to ext4\n"
-                FS=ext4
+            ""|1 ) 
+                printf ">> Selected filesystem: ext4\n"
+                export FS=ext4
                 break
                 ;;
             2 )
-                printf ">> Filesystem set to btrfs\n"
-                FS=btrfs
+                printf ">> Selected filesystem: f2fs\n"
+                export FS=f2fs
                 break
                 ;;
             3 )
-                printf ">> Filesystem set to xfs\n"
-                FS=xfs
+                printf ">> Selected filesystem: btrfs\n"
+                export FS=btrfs
+                break
+                ;;
+            4 )
+                printf ">> Selected filesystem: xfs\n"
+                export FS=xfs
                 break
                 ;;
             * )
-                printf ">> Invalid option, please try again\n"
+                printf ">> Invalid option. Please enter 1–4.\n"
                 ;;
         esac
     done
 }
 
-logo
-boot_mode
-filesystem
