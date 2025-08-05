@@ -90,22 +90,22 @@ Make your choice (1-4), default is ext4: "
         case $fs_choice in
             ""|1 ) 
                 printf ">> Selected filesystem: ext4\n"
-                export FS="ext4"
+                FS="ext4"
                 break
                 ;;
             2 )
                 printf ">> Selected filesystem: f2fs\n"
-                export FS="f2fs"
+                FS="f2fs"
                 break
                 ;;
             3 )
                 printf ">> Selected filesystem: btrfs\n"
-                export FS="btrfs"
+                FS="btrfs"
                 break
                 ;;
             4 )
                 printf ">> Selected filesystem: xfs\n"
-                export FS="xfs"
+                FS="xfs"
                 break
                 ;;
             * )
@@ -163,7 +163,7 @@ _____________________________________________\n\n"
                 else
                     disk_selected=$(sed -n "${disk_choice}p" "$disk_list" | cut -d' ' -f1)
                     printf ">> Selected disk: %s\n" "$disk_selected"
-                    export DISK="/dev/$disk_selected"
+                    DISK="/dev/$disk_selected"
                     break
                 fi
                 ;;
@@ -173,46 +173,43 @@ _____________________________________________\n\n"
 
 # Prompt the user for username, password, and hostname
 userinfo() {
-    while :; do
-        printf "_____________________________________________
+    printf "_____________________________________________
 
              User Information
-_____________________________________________ 
+_____________________________________________\n\n"
 
-Type your username: "
+    while :; do 
+
+        printf "Type your username: " 
 
         read -r username_input
-
+        username_input=$(printf '%s' "$username_input" | xargs)
         username_raw=$(printf '%s' "$username_input" | tr '[:upper:]' '[:lower:]')
 
-        if [ "$username_raw" != "root" ] && printf '%s' "$username_raw" | grep -Eq '^[a-z_][a-z0-9_-]{0,30}[a-z0-9]$'; then
+        if [ "$username_raw" != "root" ] && printf '%s' "$username_raw" | grep -Eq '^[a-z_][a-z0-9_-]{0,31}$'; then
             printf ">> Username has been set to: %s\n\n" "$username_input"
-            export USERNAME="$username_input"
+            USERNAME="$username_input"
             break
         else
-            printf ">> Invalid username. Please try again.\n"
+            printf ">> Invalid username. Please try again.\n\n"
         fi
     done
 
     while :; do
         printf "Type your password: "
         stty -echo
-        read -r "passwd1"
+        read -r password_input
         stty echo
+        password_input=$(printf '%s' "$password_input" | xargs)
 
-        printf "\nRepeat your password: "
-        stty -echo
-        read -r "passwd2"
-        stty echo
-
-        if [ "$passwd1" != "$passwd2" ]; then
-            printf "\n>> Passwords don't match. Please try again.\n\n"
-        elif [ "$passwd1" = "$passwd2" ] && [ -n "$passwd1" ]; then
-            printf "\n>> Password has been set\n\n"
-            export PASSWORD="$passwd1"
-            break
+        if [ "${#password_input}" -gt 64 ]; then
+            printf "\n>> Password must be 64 characters or less. Please try again.\n\n"
+        elif printf '%s' "$password_input" | grep -q '[[:cntrl:]]'; then
+            printf "\n>> Password cannot contain control characters. Please try again.\n\n"
         else
-            printf "\n>> Invalid password. Please try again.\n\n"
+            printf "\n>> Password has been set.\n\n"
+            PASSWORD="$password_input"
+            break
         fi
     done
 
@@ -220,20 +217,88 @@ Type your username: "
         printf "Type your hostname: "
 
         read -r hostname_input
-
+        hostname_input=$(printf '%s' "$hostname_input" | xargs)
         hostname_raw=$(printf '%s' "$hostname_input" | tr '[:upper:]' '[:lower:]')
 
         if printf '%s' "$hostname_raw" | grep -Eq '^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'; then
             printf ">> Hostname has been set to: %s\n" "$hostname_input"
-            export HOSTNAME="$hostname_input"
+            HOSTNAME="$hostname_input"
             break
         else
-            printf ">> Invalid hostname. Please try again.\n"
+            printf ">> Invalid hostname. Please try again.\n\n"
         fi
     done
 }
 
-logo
-userinfo
-disk
-filesystem
+select_option() {
+    local options=("$@")
+    local num_options=${#options[@]}
+    local selected=0
+    local last_selected=-1
+
+    while true; do
+        # Move cursor up to the start of the menu
+        if [ $last_selected -ne -1 ]; then
+            echo -ne "\033[${num_options}A"
+        fi
+
+        if [ $last_selected -eq -1 ]; then
+            echo "Please select an option using the arrow keys and Enter:"
+        fi
+        for i in "${!options[@]}"; do
+            if [ "$i" -eq $selected ]; then
+                echo "> ${options[$i]}"
+            else
+                echo "  ${options[$i]}"
+            fi
+        done
+
+        last_selected=$selected
+
+        # Read user input
+        read -rsn1 key
+        case $key in
+            $'\x1b') # ESC sequence
+                read -rsn2 -t 0.1 key
+                case $key in
+                    '[A') # Up arrow
+                        ((selected--))
+                        if [ $selected -lt 0 ]; then
+                            selected=$((num_options - 1))
+                        fi
+                        ;;
+                    '[B') # Down arrow
+                        ((selected++))
+                        if [ $selected -ge $num_options ]; then
+                            selected=0
+                        fi
+                        ;;
+                esac
+                ;;
+            '') # Enter key
+                break
+                ;;
+        esac
+    done
+
+    return $selected
+}
+
+filesystem () {
+    echo -ne "
+    Please Select your file system for both boot and root
+    "
+    options=("btrfs" "ext4" "luks" "exit")
+    select_option "${options[@]}"
+
+    case $? in
+    0) export FS=btrfs;;
+    1) export FS=ext4;;
+    2)
+        set_password "LUKS_PASSWORD"
+        export FS=luks
+        ;;
+    3) exit ;;
+    *) echo "Wrong option please select again"; filesystem;;
+    esac
+}
