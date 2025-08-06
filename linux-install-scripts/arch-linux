@@ -1,0 +1,178 @@
+#!/bin/sh -e
+
+# Check if the script is being run in an Arch Linux ISO environment
+check_archiso() {
+    if [ ! -e /run/archiso/bootmnt/arch/x86_64/airootfs.sfs ]; then
+        printf "ERROR: This script must be run from an Arch Linux ISO environment." >&2
+        exit 1
+    fi
+}
+
+# Check if the system is booted in UEFI mode
+check_bootmode() {
+    if [ ! -e /sys/firmware/efi ]; then
+        printf "ERROR: This script requires UEFI boot mode." >&2
+        exit 1
+    fi
+}
+
+# Check if the script is being run as root
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        printf "ERROR: This script must be run as root." >&2
+        exit 1
+    fi
+}
+
+# Check if pacman is running and remove the lock file if necessary
+check_pacman() {
+    if [ -f /var/lib/pacman/db.lck ]; then
+        if pgrep -x pacman >/dev/null; then
+            printf "ERROR: pacman is currently running. Close it before proceeding." >&2
+            exit 1
+        else
+            rm -f /var/lib/pacman/db.lck
+        fi
+    fi
+}
+
+# Check if fzf is installed, and install if needed
+check_fzf() {
+    if ! command -v fzf >/dev/null 2>&1; then
+        if ! pacman -Sy --noconfirm fzf >/dev/null 2>&1; then
+            printf "ERROR: Failed to install fzf." >&2
+            exit 1
+        fi
+    fi
+}
+
+# Group all checks into a single function
+check_environment() {
+    check_archiso
+    check_bootmode
+    check_root
+    check_pacman
+    check_fzf
+}
+
+# Structures a selection menu using fzf
+selection_menu() {
+    echo "$1" | fzf --prompt="$2"
+}
+
+# Detect the user's region based on IP address and set locale, timezone and mirrors accordingly
+detect_region() {
+    TIMEZONE=$(curl -s https://ipapi.co/timezone || echo "UTC")
+    COUNTRY=$(curl -s https://ipapi.co/country_name || echo "World")
+    
+    reflector --country "$COUNTRY" --age 12 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+
+    case $COUNTRY in
+        "Brazil")
+            LOCALE="pt_BR.UTF-8"
+            ;;
+        "United States")
+            LOCALE="en_US.UTF-8"
+            ;;
+        *)
+            locale_list=$(awk '{ sub(/^#/, ""); if ($1 ~ /\.UTF-8$/) print $1 }' /etc/locale.gen)
+            LOCALE=$(selection_menu "$locale_list" "Select your language: ")
+            ;;
+    esac
+}
+
+# Prompt the user to select a keyboard layout
+keyboard_layout() {
+    keymaps=$(localectl list-keymaps)
+    KEYBOARD=$(selection_menu "$keymaps" "Select your keyboard layout: ")
+}
+
+# Prompt the user for username, password, and hostname
+userinfo() {
+    while :; do 
+
+        printf "Enter your username: " 
+
+        read -r username_input
+        username_input=$(printf '%s' "$username_input" | xargs)
+        username_raw=$(printf '%s' "$username_input" | tr '[:upper:]' '[:lower:]')
+
+        if [ "$username_raw" != "root" ] && printf '%s' "$username_raw" | grep -Eq '^[a-z_][a-z0-9_-]{0,31}$'; then
+            USERNAME="$username_input"
+            break
+        else
+            printf "Invalid username. Please try again."
+        fi
+    done
+
+    while :; do
+        printf "Enter your password: "
+        stty -echo
+        read -r password_input1
+        stty echo
+
+        printf "Re-enter your password: "
+        stty -echo
+        read -r password_input2
+        stty echo
+
+        if [ "$password_input1" != "$password_input2" ]; then
+            printf "Passwords don't match. Please try again."
+        elif [ "$password_input1" = "$password_input2" ] && [ -n "$password_input1" ]; then
+            PASSWORD="$password_input1"
+            break
+        else
+            printf "Invalid password. Please try again."
+        fi
+    done
+
+    while :; do
+        printf "Name your machine: "
+
+        read -r hostname_input
+        hostname_input=$(printf '%s' "$hostname_input" | xargs)
+        hostname_raw=$(printf '%s' "$hostname_input" | tr '[:upper:]' '[:lower:]')
+
+        if printf '%s' "$hostname_raw" | grep -Eq '^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'; then
+            HOSTNAME="$hostname_input"
+            break
+        else
+            printf "Invalid hostname. Please try again."
+        fi
+    done
+}
+
+# Prompt the user to select the installation disk
+select_disk() {
+    disks=$(lsblk -dn -o NAME,SIZE,TYPE,TRAN | awk '
+        $3 == "disk" && $4 != "usb" && $1 !~ /^(loop|ram|sr|fd)/ {
+            printf "/dev/%s (%s)\n", $1, $2
+        }')
+
+    if [ -z "$disks" ]; then
+        printf "ERROR: No valid disks found.\n"
+        exit 1
+    fi
+
+    selected=$(selection_menu "$disks" "Select a disk: ")
+
+    if [ -z "$selected" ]; then
+        printf "No disk selected.\n"
+        exit 1
+    fi
+
+    DISK=$(printf '%s' "$selected" | cut -d' ' -f1)
+}
+
+# Prompt the user to select a filesystem
+select_filesystem() {
+    options="ext4\nf2fs\nbtrfs\nxfs"
+    FS=$(selection_menu "$options" "Select a filesystem: ")
+}
+
+# Prompt the user to select a kernel
+select_kernel() {
+    options="linux\nlinux-lts\nlinux-zen"
+    KERNEL=$(selection_menu "$options" "Select a kernel: ")
+}
+
